@@ -103,3 +103,9 @@ env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
 ```
 
 `build.sh` 会执行 `gofmt`、全量 Go 测试并生成 `bin/gitcode-mcp`。
+
+## SSE 部署
+
+设置 `MCP_TRANSPORT=sse` 后，默认只监听 `127.0.0.1:8000`。可通过 `MCP_SSE_HOST` 和 `MCP_SSE_PORT` 配置监听地址与端口，MCP 入口为 `/sse`。
+
+SSE 服务本身没有客户端鉴权。携带 GitCode 凭据的实例应通过 SSH 隧道、私有网络或带鉴权的反向代理访问。把 `MCP_SSE_HOST` 改为 `0.0.0.0` 或 `::` 前，先配置访问控制。

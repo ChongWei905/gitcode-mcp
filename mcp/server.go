@@ -3,7 +3,9 @@ package mcp
 import (
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/server"
@@ -19,6 +21,7 @@ type MCPServerOptions struct {
 	Name         string
 	Version      string
 	Transport    string
+	ServerHost   string
 	ServerPort   int
 	TokenManager TokenManager
 }
@@ -34,6 +37,7 @@ func DefaultMCPOptions() MCPServerOptions {
 		Name:       "GitCode MCP",
 		Version:    "2.0.0",
 		Transport:  config.GlobalConfig.MCPTransport,
+		ServerHost: config.GlobalConfig.MCPSSEHost,
 		ServerPort: config.GlobalConfig.MCPSSEPort,
 	}
 }
@@ -73,8 +77,12 @@ func Run(s *server.MCPServer, options MCPServerOptions) error {
 	// 根据传输方式启动服务器
 	switch strings.ToLower(options.Transport) {
 	case "sse":
-		address := fmt.Sprintf(":%d", options.ServerPort)
-		log.Printf("GitCode MCP服务器将在 http://localhost%s 上启动 (SSE模式)\n", address)
+		host := options.ServerHost
+		if host == "" {
+			host = "127.0.0.1"
+		}
+		address := net.JoinHostPort(host, strconv.Itoa(options.ServerPort))
+		log.Printf("GitCode MCP服务器将在 http://%s 上启动 (SSE模式)\n", address)
 
 		// 创建SSE服务器
 		sseServer := server.NewSSEServer(s)

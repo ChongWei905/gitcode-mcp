@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -25,6 +26,7 @@ type Config struct {
 	MaxResponseSize int64
 
 	MCPTransport string
+	MCPSSEHost   string
 	MCPSSEPort   int
 
 	CredentialFile   string
@@ -34,6 +36,7 @@ type Config struct {
 var defaultConfig = Config{
 	GitCodeAPIURL:   defaultAPIURL,
 	MCPTransport:    "stdio",
+	MCPSSEHost:      "127.0.0.1",
 	MCPSSEPort:      8000,
 	APITimeout:      defaultAPITimeout,
 	MaxResponseSize: defaultMaxResponseBytes,
@@ -58,6 +61,7 @@ func Init() error {
 	)
 	cfg.GitCodeAPIURL = resolveValue(fileValues, cfg.GitCodeAPIURL, "GITCODE_API_URL")
 	cfg.MCPTransport = strings.ToLower(resolveValue(fileValues, cfg.MCPTransport, "MCP_TRANSPORT"))
+	cfg.MCPSSEHost = resolveValue(fileValues, cfg.MCPSSEHost, "MCP_SSE_HOST")
 
 	if value := resolveValue(fileValues, "", "MCP_SSE_PORT"); value != "" {
 		port, parseErr := strconv.Atoi(value)
@@ -171,6 +175,9 @@ func validateConfig(cfg Config) error {
 	}
 	if cfg.MCPTransport != "stdio" && cfg.MCPTransport != "sse" {
 		return fmt.Errorf("MCP_TRANSPORT must be stdio or sse")
+	}
+	if cfg.MCPTransport == "sse" && cfg.MCPSSEHost != "localhost" && net.ParseIP(cfg.MCPSSEHost) == nil {
+		return fmt.Errorf("MCP_SSE_HOST must be an IP address or localhost")
 	}
 	if cfg.MCPTransport == "sse" && (cfg.MCPSSEPort <= 0 || cfg.MCPSSEPort > 65535) {
 		return fmt.Errorf("MCP_SSE_PORT must be between 1 and 65535")
