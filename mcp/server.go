@@ -32,7 +32,7 @@ type TokenManager interface {
 func DefaultMCPOptions() MCPServerOptions {
 	return MCPServerOptions{
 		Name:       "GitCode MCP",
-		Version:    "1.0.0",
+		Version:    "2.0.0",
 		Transport:  config.GlobalConfig.MCPTransport,
 		ServerPort: config.GlobalConfig.MCPSSEPort,
 	}
@@ -45,7 +45,7 @@ func NewMCPServer(options MCPServerOptions) (*server.MCPServer, error) {
 	if options.TokenManager != nil {
 		token = options.TokenManager.GetToken()
 	}
-	
+
 	apiClient, err := api.NewGitCodeAPI(token)
 	if err != nil {
 		return nil, fmt.Errorf("创建API客户端失败: %w", err)
@@ -55,6 +55,8 @@ func NewMCPServer(options MCPServerOptions) (*server.MCPServer, error) {
 	s := server.NewMCPServer(
 		options.Name,
 		options.Version,
+		server.WithToolCapabilities(false),
+		server.WithInstructions("GitCode credentials are loaded and injected by this MCP server; never ask the user for a token and never put access_token, Authorization, PRIVATE-TOKEN, or GITCODE_TOKEN in tool arguments. Prefer typed tools. When a documented /api/v5 endpoint has no typed tool, use gitcode_api_request with a relative path. Treat POST, PUT, PATCH, and DELETE as writes requiring user authorization. After a mutation, read the canonical resource back before claiming success. DELETE also requires confirm_destructive=true."),
 	)
 
 	// 注册所有工具
@@ -73,20 +75,20 @@ func Run(s *server.MCPServer, options MCPServerOptions) error {
 	case "sse":
 		address := fmt.Sprintf(":%d", options.ServerPort)
 		log.Printf("GitCode MCP服务器将在 http://localhost%s 上启动 (SSE模式)\n", address)
-		
+
 		// 创建SSE服务器
 		sseServer := server.NewSSEServer(s)
-		
+
 		// 设置HTTP服务器
 		httpServer := &http.Server{
 			Addr:    address,
 			Handler: sseServer,
 		}
-		
+
 		// 启动HTTP服务器
 		return httpServer.ListenAndServe()
 	default:
 		log.Println("GitCode MCP服务器已启动 (STDIO模式)")
 		return server.ServeStdio(s)
 	}
-} 
+}

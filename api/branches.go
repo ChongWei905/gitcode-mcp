@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 )
 
 // Branch 表示分支信息
@@ -19,8 +20,8 @@ type CommitInfo struct {
 	Message   string `json:"message"`
 	Timestamp string `json:"timestamp"`
 	URL       string `json:"url"`
-	Author    Author  `json:"author"`
-	Committer Author  `json:"committer"`
+	Author    Author `json:"author"`
+	Committer Author `json:"committer"`
 }
 
 // Author 表示提交作者信息
@@ -38,33 +39,38 @@ type CreateBranchOptions struct {
 
 // ListBranches 列出仓库的分支
 func (api *BranchAPI) ListBranches(owner, repo string) ([]Branch, error) {
+	return api.ListBranchesWithParams(owner, repo, nil)
+}
+
+// ListBranchesWithParams lists repository branches with pagination.
+func (api *BranchAPI) ListBranchesWithParams(owner, repo string, params url.Values) ([]Branch, error) {
 	path := fmt.Sprintf("/repos/%s/%s/branches", owner, repo)
-	resp, err := api.Client.GET(path, nil)
+	resp, err := api.Client.GET(path, params)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var branches []Branch
 	if err := json.Unmarshal(resp, &branches); err != nil {
 		return nil, fmt.Errorf("解析分支列表失败: %w", err)
 	}
-	
+
 	return branches, nil
 }
 
 // GetBranch 获取特定分支的详细信息
 func (api *BranchAPI) GetBranch(owner, repo, branch string) (*Branch, error) {
-	path := fmt.Sprintf("/repos/%s/%s/branches/%s", owner, repo, branch)
+	path := fmt.Sprintf("/repos/%s/%s/branches/%s", owner, repo, url.PathEscape(branch))
 	resp, err := api.Client.GET(path, nil)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var branchInfo Branch
 	if err := json.Unmarshal(resp, &branchInfo); err != nil {
 		return nil, fmt.Errorf("解析分支详情失败: %w", err)
 	}
-	
+
 	return &branchInfo, nil
 }
 
@@ -75,54 +81,54 @@ func (api *BranchAPI) CreateBranch(owner, repo, branch, ref string) (*Branch, er
 		BranchName: branch,
 		Ref:        ref,
 	}
-	
+
 	resp, err := api.Client.POST(path, nil, options)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var branchInfo Branch
 	if err := json.Unmarshal(resp, &branchInfo); err != nil {
 		return nil, fmt.Errorf("解析新分支信息失败: %w", err)
 	}
-	
+
 	return &branchInfo, nil
 }
 
 // DeleteBranch 删除分支
 func (api *BranchAPI) DeleteBranch(owner, repo, branch string) error {
-	path := fmt.Sprintf("/repos/%s/%s/branches/%s", owner, repo, branch)
+	path := fmt.Sprintf("/repos/%s/%s/branches/%s", owner, repo, url.PathEscape(branch))
 	_, err := api.Client.DELETE(path, nil)
 	return err
 }
 
 // ProtectBranch 设置分支保护
 func (api *BranchAPI) ProtectBranch(owner, repo, branch string, options map[string]interface{}) error {
-	path := fmt.Sprintf("/repos/%s/%s/branches/%s/protection", owner, repo, branch)
+	path := fmt.Sprintf("/repos/%s/%s/branches/%s/protection", owner, repo, url.PathEscape(branch))
 	_, err := api.Client.PUT(path, nil, options)
 	return err
 }
 
 // RemoveProtection 移除分支保护
 func (api *BranchAPI) RemoveProtection(owner, repo, branch string) error {
-	path := fmt.Sprintf("/repos/%s/%s/branches/%s/protection", owner, repo, branch)
+	path := fmt.Sprintf("/repos/%s/%s/branches/%s/protection", owner, repo, url.PathEscape(branch))
 	_, err := api.Client.DELETE(path, nil)
 	return err
 }
 
 // GetProtection 获取分支保护规则
 func (api *BranchAPI) GetProtection(owner, repo, branch string) (map[string]interface{}, error) {
-	path := fmt.Sprintf("/repos/%s/%s/branches/%s/protection", owner, repo, branch)
+	path := fmt.Sprintf("/repos/%s/%s/branches/%s/protection", owner, repo, url.PathEscape(branch))
 	resp, err := api.Client.GET(path, nil)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var protection map[string]interface{}
 	if err := json.Unmarshal(resp, &protection); err != nil {
 		return nil, fmt.Errorf("解析分支保护规则失败: %w", err)
 	}
-	
+
 	return protection, nil
 }
 
@@ -132,7 +138,7 @@ func (api *BranchAPI) IsBranchProtected(owner, repo, branch string) (bool, error
 	if err != nil {
 		return false, err
 	}
-	
+
 	return branchInfo.Protected, nil
 }
 
@@ -143,20 +149,20 @@ func (api *BranchAPI) MergeBranch(owner, repo, base, head string, message string
 		"base": base,
 		"head": head,
 	}
-	
+
 	if message != "" {
 		options["commit_message"] = message
 	}
-	
+
 	resp, err := api.Client.POST(path, nil, options)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var result map[string]interface{}
 	if err := json.Unmarshal(resp, &result); err != nil {
 		return nil, fmt.Errorf("解析合并结果失败: %w", err)
 	}
-	
+
 	return result, nil
-} 
+}

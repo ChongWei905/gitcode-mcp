@@ -1,102 +1,105 @@
-# GitCode MCP Go Server
+# GitCode MCP 2.0
 
-这是GitCode MCP服务器的Go语言实现版本，提供了GitCode API的标准MCP接口封装。
+这是 GitCode MCP 服务的扩展版本。它把 GitCode `/api/v5` 的认证、网络约束、常用工作流和通用 REST 访问统一封装起来，调用者不需要、也不允许在工具参数中传 AK。
 
-## 功能特点
+## 解决的问题
 
-- 完整支持GitCode API的主要功能
-- 基于标准MCP协议实现，使用mark3labs/mcp-go SDK
-- 支持STDIO和SSE两种传输方式
-- 轻量级，响应速度快
-- 并发处理能力强，适合高负载场景
-- 模块化的代码结构，便于扩展和维护
+- AK 固定从 `~/.gitcode_mcp/.env` 加载，MCP 客户端配置和每次 API 调用都不再重复填写。
+- 保留仓库、分支、Issue、Pull Request 和搜索等常用强类型工具。
+- `gitcode_api_request` 可以访问尚未封装成强类型工具的 GitCode `/api/v5` 接口，包括 Commit、Tag、Milestone、Organizations、Webhooks、Release、Actions、AI Hub 等类别。
+- GitCode 返回的 ID/Issue 编号可能是 JSON 字符串或数字，客户端统一按字符串兼容解析。
+- 请求只能发送到配置的 GitCode API 主机；跨主机跳转、完整 URL、调用方传入的 token 字段都会被拒绝。
+- GitCode 请求不使用本机 HTTP(S) 代理，响应大小默认限制为 4 MiB。
+- 写操作必须由用户授权；通用 `DELETE` 还必须传 `confirm_destructive=true`。
 
-## 安装要求
+GitCode 当前官方 API 目录见：[GitCode OpenAPI](https://docs.gitcode.com/docs/apis/)。
 
-- Go 1.16+
-- 网络连接以访问GitCode API
+## 凭据：唯一来源
 
-## 环境变量配置
+默认凭据文件是：
 
-项目使用`.env`文件来管理环境变量。您可以复制`.env.example`文件并重命名为`.env`，然后设置以下环境变量：
-
+```text
+~/.gitcode_mcp/.env
 ```
-# GitCode API配置
-GITCODE_TOKEN=<您的GitCode访问令牌>
+
+内容：
+
+```dotenv
+GITCODE_TOKEN=<your-personal-access-token>
 GITCODE_API_URL=https://api.gitcode.com/api/v5
+MCP_TRANSPORT=stdio
 ```
 
-## 安装说明
-
-### 方法一：使用安装脚本（推荐）
+权限必须收紧，否则服务会拒绝启动：
 
 ```bash
-# 克隆仓库
-git clone https://github.com/gitcode-org-com/gitcode-mcp.git
-cd gitcode-mcp
-
-# 运行安装脚本
-./install.sh
+chmod 700 ~/.gitcode_mcp
+chmod 600 ~/.gitcode_mcp/.env
 ```
 
-安装脚本会：
-1. 编译项目生成可执行文件
-2. 创建配置目录 `~/.gitcode_mcp`
-3. 复制配置文件到配置目录
-4. 提示输入您的GitCode访问令牌
-5. 将可执行文件安装到系统路径（需要管理员权限）或用户目录
+配置优先级如下：
 
-安装完成后，您可以在任何位置运行 `gitcode-mcp` 命令。
+1. 进程环境变量 `GITCODE_TOKEN` 或 `GITCODE_ACCESS_TOKEN`
+2. `GITCODE_MCP_ENV_FILE` 指定的文件
+3. 默认文件 `~/.gitcode_mcp/.env`
 
-### 方法二：使用 Go Install
+不要把 AK 写进 `~/.codex/config.toml`、MCP 工具参数、命令历史或日志。
+
+## Codex 配置示例
+
+构建后，可通过仓库中的无密钥启动脚本运行本服务。将以下路径替换成克隆目录的绝对路径：
+
+```toml
+[mcp_servers.gitcode]
+command = "<absolute-path-to-clone>/run-gitcode-mcp"
+enabled = true
+
+[mcp_servers.gitcode.env]
+GITCODE_API_URL = "https://api.gitcode.com/api/v5"
+MCP_TRANSPORT = "stdio"
+```
+
+启动脚本只负责清理代理并启动二进制；凭据由二进制自己读取。修改服务或配置后，需要在 Codex 设置中重启这个 MCP，或新开一个 Codex 任务。
+
+## 工具面
+
+### 认证与完整 API 兜底
+
+- `gitcode_auth_status`：只读验证 MCP 内部凭据，不返回 token。
+- `gitcode_api_request`：调用任意已文档化的相对 `/api/v5` 路径；自动鉴权。
+
+通用读取示例的参数形状：
+
+```json
+{
+  "method": "GET",
+  "path": "/api/v5/user/issues",
+  "query": {"state": "open", "page": 1, "per_page": 100}
+}
+```
+
+通用工具禁止 `access_token`、`Authorization`、`PRIVATE-TOKEN`、`GITCODE_TOKEN` 等认证字段，也禁止传完整 URL。
+
+### 常用强类型工具
+
+- 仓库：`list_repositories`、`get_repository`、`get_repository_content`、`create_repository`
+- 分支：`list_branches`、`get_branch`、`create_branch`
+- Issue：`list_issues`、`get_issue`、`create_issue`、`update_issue`、`list_issue_comments`、`add_issue_comment`
+- Pull Request：`list_pull_requests`、`get_pull_request`、`list_pull_request_reviews`、`list_pull_request_comments`、`reply_pull_request_comment`、`list_pull_request_files`、`list_pull_request_commits`、`list_pull_request_issues`、`create_pull_request`、`update_pull_request`
+- 搜索：`search_code`、`search_repositories`、`search_issues`、`search_users`、`search_commits`
+
+列表类工具统一支持 `page`/`per_page`；GitCode 单页上限为 100。
+
+## 开发与验证
+
+要求 Go 1.23+（仓库 toolchain 为 Go 1.24.1）。
 
 ```bash
-# 安装最新版本
-go install github.com/gitcode-org-com/gitcode-mcp@latest
+env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
+  -u http_proxy -u https_proxy -u all_proxy \
+  go test ./...
+
+./build.sh
 ```
 
-使用 Go Install 安装后，程序会被安装到 `$GOPATH/bin` 目录下。请确保该目录已添加到您的 PATH 环境变量中。
-
-## 快速开始
-
-1. 运行MCP服务器
-
-```bash
-gitcode-mcp
-```
-
-2. 配置AI平台
-
-   项目docs目录下提供了各平台的配置文件参考：
-   - Claude平台: `claude_config.json`
-   - Cline平台: `cline_config.json`
-   - Cursor平台: `cursor_config.json`
-   - Windsurf平台: `windsurf_config.json`
-
-## MCP工具清单
-
-GitCode MCP提供以下工具：
-
-| 工具名称 | 描述 | 参数 |
-|---------|------|-----|
-| list_repositories | 列出当前用户的仓库 | 无 |
-| get_repository | 获取特定仓库的详细信息 | owner, repo |
-| create_repository | 创建新仓库 | name, description?, private? |
-| list_branches | 列出仓库的分支 | owner, repo |
-| get_branch | 获取特定分支的详细信息 | owner, repo, branch |
-| create_branch | 创建新分支 | owner, repo, branch, ref |
-| list_issues | 列出仓库的Issues | owner, repo |
-| get_issue | 获取特定Issue的详细信息 | owner, repo, issue_number |
-| create_issue | 创建新Issue | owner, repo, title, body? |
-| list_pull_requests | 列出仓库的Pull Requests | owner, repo |
-| get_pull_request | 获取特定Pull Request的详细信息 | owner, repo, pull_number |
-| create_pull_request | 创建新Pull Request | owner, repo, title, head, base, body? |
-| search_code | 搜索代码 | query |
-| search_repositories | 搜索仓库 | query |
-| search_issues | 搜索Issues | query |
-| search_users | 搜索用户 | query |
-
-## 许可证
-
-该项目采用MIT许可证。详情请参阅LICENSE文件。
-
+`build.sh` 会执行 `gofmt`、全量 Go 测试并生成 `bin/gitcode-mcp`。

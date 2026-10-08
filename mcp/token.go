@@ -24,12 +24,12 @@ func NewConfigTokenManager() *ConfigTokenManager {
 func (m *ConfigTokenManager) GetToken() string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	// 优先使用环境变量中的令牌
 	if envToken := os.Getenv("GITCODE_TOKEN"); envToken != "" {
 		return envToken
 	}
-	
+
 	return m.token
 }
 
@@ -37,6 +37,6 @@ func (m *ConfigTokenManager) GetToken() string {
 func (m *ConfigTokenManager) SetToken(token string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	m.token = token
-} 
+}

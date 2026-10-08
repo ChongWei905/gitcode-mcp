@@ -1,0 +1,12 @@
+#!/bin/zsh
+set -euo pipefail
+
+unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+unset WS_PROXY WSS_PROXY ws_proxy wss_proxy
+
+direct_hosts="api.gitcode.com,gitcode.com,.gitcode.com"
+export NO_PROXY="${NO_PROXY:+${NO_PROXY},}${direct_hosts}"
+export no_proxy="${no_proxy:+${no_proxy},}${direct_hosts}"
+
+project_dir="$(cd "$(dirname "$0")" && pwd)"
+exec "${project_dir}/bin/gitcode-mcp" "$@"

@@ -2,85 +2,45 @@ package tools
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
+	"net/http"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	
+
 	"github.com/gitcode-org-com/gitcode-mcp/api"
 )
 
-// AddSearchTools 添加搜索相关工具到MCP服务器
+// AddSearchTools registers paginated GitCode search tools.
 func AddSearchTools(s *server.MCPServer, apiClient *api.GitCodeAPI) {
-	// 搜索代码
-	searchCodeTool := mcp.NewTool("search_code",
-		mcp.WithDescription("搜索代码"),
-		mcp.WithString("query",
-			mcp.Required(),
-			mcp.Description("搜索关键词"),
-		),
+	registerSearchTool(s, apiClient, "search_code", "/search/code", "Search GitCode source code.")
+	registerSearchTool(s, apiClient, "search_repositories", "/search/repositories", "Search GitCode repositories.")
+	registerSearchTool(s, apiClient, "search_issues", "/search/issues", "Search GitCode issues.")
+	registerSearchTool(s, apiClient, "search_users", "/search/users", "Search GitCode users.")
+	registerSearchTool(s, apiClient, "search_commits", "/search/commits", "Search GitCode commits.")
+}
+
+func registerSearchTool(s *server.MCPServer, apiClient *api.GitCodeAPI, name, path, description string) {
+	tool := mcp.NewTool(name,
+		mcp.WithDescription(description),
+		mcp.WithString("query", mcp.Required(), mcp.Description("Search query")),
+		mcp.WithNumber("page", mcp.Description("Page number, starting at 1"), mcp.Min(1)),
+		mcp.WithNumber("per_page", mcp.Description("Items per page, maximum 100"), mcp.Min(1), mcp.Max(100)),
 	)
-	s.AddTool(searchCodeTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		query, _ := request.Params.Arguments["query"].(string)
-		
-		results, err := apiClient.Search.SearchCode(query)
+	s.AddTool(tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		query, err := requiredString(request.Params.Arguments, "query")
 		if err != nil {
-			return nil, fmt.Errorf("搜索代码失败: %w", err)
+			return ErrorResult("validate "+name, err)
 		}
-		return FormatJSONResult(results)
-	})
-	
-	// 搜索仓库
-	searchReposTool := mcp.NewTool("search_repositories",
-		mcp.WithDescription("搜索仓库"),
-		mcp.WithString("query",
-			mcp.Required(),
-			mcp.Description("搜索关键词"),
-		),
-	)
-	s.AddTool(searchReposTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		query, _ := request.Params.Arguments["query"].(string)
-		
-		results, err := apiClient.Search.SearchRepositories(query)
+		params, err := paginationValues(request.Params.Arguments)
 		if err != nil {
-			return nil, fmt.Errorf("搜索仓库失败: %w", err)
+			return ErrorResult("validate "+name, err)
 		}
-		return FormatJSONResult(results)
-	})
-	
-	// 搜索Issues
-	searchIssuesTool := mcp.NewTool("search_issues",
-		mcp.WithDescription("搜索Issues"),
-		mcp.WithString("query",
-			mcp.Required(),
-			mcp.Description("搜索关键词"),
-		),
-	)
-	s.AddTool(searchIssuesTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		query, _ := request.Params.Arguments["query"].(string)
-		
-		results, err := apiClient.Search.SearchIssues(query)
+		params.Set("q", query)
+		response, err := apiClient.Do(ctx, http.MethodGet, path, params, nil)
 		if err != nil {
-			return nil, fmt.Errorf("搜索Issues失败: %w", err)
+			return ErrorResult("call "+name, err)
 		}
-		return FormatJSONResult(results)
+		return FormatJSONResult(json.RawMessage(response.Body))
 	})
-	
-	// 搜索用户
-	searchUsersTool := mcp.NewTool("search_users",
-		mcp.WithDescription("搜索用户"),
-		mcp.WithString("query",
-			mcp.Required(),
-			mcp.Description("搜索关键词"),
-		),
-	)
-	s.AddTool(searchUsersTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		query, _ := request.Params.Arguments["query"].(string)
-		
-		results, err := apiClient.Search.SearchUsers(query)
-		if err != nil {
-			return nil, fmt.Errorf("搜索用户失败: %w", err)
-		}
-		return FormatJSONResult(results)
-	})
-} 
+}

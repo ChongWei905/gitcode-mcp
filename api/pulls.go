@@ -3,63 +3,64 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 )
 
 // PullRequest 表示Pull Request信息
 type PullRequest struct {
-	ID              int       `json:"id"`
-	Number          int       `json:"number"`
-	Title           string    `json:"title"`
-	Body            string    `json:"body"`
-	State           string    `json:"state"`
-	URL             string    `json:"url"`
-	HTMLURL         string    `json:"html_url"`
-	User            User      `json:"user"`
-	CreatedAt       string    `json:"created_at"`
-	UpdatedAt       string    `json:"updated_at"`
-	ClosedAt        string    `json:"closed_at"`
-	MergedAt        string    `json:"merged_at"`
-	MergeCommitSha  string    `json:"merge_commit_sha"`
-	Assignees       []User    `json:"assignees"`
-	RequestedReviewers []User `json:"requested_reviewers"`
-	Labels          []Label   `json:"labels"`
-	Base            PRRef     `json:"base"`
-	Head            PRRef     `json:"head"`
-	Merged          bool      `json:"merged"`
-	Mergeable       bool      `json:"mergeable"`
-	Rebaseable      bool      `json:"rebaseable"`
-	Comments        int       `json:"comments"`
-	Commits         int       `json:"commits"`
-	Additions       int       `json:"additions"`
-	Deletions       int       `json:"deletions"`
-	ChangedFiles    int       `json:"changed_files"`
+	ID                 FlexibleID `json:"id"`
+	Number             FlexibleID `json:"number"`
+	Title              string     `json:"title"`
+	Body               string     `json:"body"`
+	State              string     `json:"state"`
+	URL                string     `json:"url"`
+	HTMLURL            string     `json:"html_url"`
+	User               User       `json:"user"`
+	CreatedAt          string     `json:"created_at"`
+	UpdatedAt          string     `json:"updated_at"`
+	ClosedAt           string     `json:"closed_at"`
+	MergedAt           string     `json:"merged_at"`
+	MergeCommitSha     string     `json:"merge_commit_sha"`
+	Assignees          []User     `json:"assignees"`
+	RequestedReviewers []User     `json:"requested_reviewers"`
+	Labels             []Label    `json:"labels"`
+	Base               PRBranch   `json:"base"`
+	Head               PRBranch   `json:"head"`
+	Merged             bool       `json:"merged"`
+	Mergeable          bool       `json:"mergeable"`
+	Rebaseable         bool       `json:"rebaseable"`
+	Comments           int        `json:"comments"`
+	Commits            int        `json:"commits"`
+	Additions          int        `json:"additions"`
+	Deletions          int        `json:"deletions"`
+	ChangedFiles       int        `json:"changed_files"`
 }
 
 // PRBranch 表示PR分支信息
 type PRBranch struct {
-	Label string `json:"label"`
-	Ref   string `json:"ref"`
-	SHA   string `json:"sha"`
-	User  User   `json:"user"`
+	Label string     `json:"label"`
+	Ref   string     `json:"ref"`
+	SHA   string     `json:"sha"`
+	User  User       `json:"user"`
 	Repo  Repository `json:"repo"`
 }
 
 // CreatePullRequestOptions 表示创建PR的参数
 type CreatePullRequestOptions struct {
-	Title               string   `json:"title"`
-	Body                string   `json:"body,omitempty"`
-	Head                string   `json:"head"`
-	Base                string   `json:"base"`
-	Draft               bool     `json:"draft,omitempty"`
-	MaintainerCanModify bool     `json:"maintainer_can_modify,omitempty"`
+	Title               string `json:"title"`
+	Body                string `json:"body,omitempty"`
+	Head                string `json:"head"`
+	Base                string `json:"base"`
+	Draft               bool   `json:"draft,omitempty"`
+	MaintainerCanModify bool   `json:"maintainer_can_modify,omitempty"`
 }
 
 // UpdatePullRequestOptions 表示更新PR的参数
 type UpdatePullRequestOptions struct {
-	Title   string `json:"title,omitempty"`
-	Body    string `json:"body,omitempty"`
-	State   string `json:"state,omitempty"`
-	Base    string `json:"base,omitempty"`
+	Title string `json:"title,omitempty"`
+	Body  string `json:"body,omitempty"`
+	State string `json:"state,omitempty"`
+	Base  string `json:"base,omitempty"`
 }
 
 // MergeOptions 表示合并PR的参数
@@ -73,33 +74,43 @@ type MergeOptions struct {
 
 // ListPullRequests 列出仓库的Pull Requests
 func (api *PullRequestAPI) ListPullRequests(owner, repo string) ([]PullRequest, error) {
+	return api.ListPullRequestsWithParams(owner, repo, nil)
+}
+
+// ListPullRequestsWithParams lists pull requests with pagination and filters.
+func (api *PullRequestAPI) ListPullRequestsWithParams(owner, repo string, params url.Values) ([]PullRequest, error) {
 	path := fmt.Sprintf("/repos/%s/%s/pulls", owner, repo)
-	resp, err := api.Client.GET(path, nil)
+	resp, err := api.Client.GET(path, params)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var pulls []PullRequest
 	if err := json.Unmarshal(resp, &pulls); err != nil {
 		return nil, fmt.Errorf("解析Pull Requests列表失败: %w", err)
 	}
-	
+
 	return pulls, nil
 }
 
 // GetPullRequest 获取特定Pull Request的详细信息
 func (api *PullRequestAPI) GetPullRequest(owner, repo string, pullNumber int) (*PullRequest, error) {
-	path := fmt.Sprintf("/repos/%s/%s/pulls/%d", owner, repo, pullNumber)
+	return api.GetPullRequestByNumber(owner, repo, fmt.Sprintf("%d", pullNumber))
+}
+
+// GetPullRequestByNumber gets a pull request using its repository sequence number.
+func (api *PullRequestAPI) GetPullRequestByNumber(owner, repo, pullNumber string) (*PullRequest, error) {
+	path := fmt.Sprintf("/repos/%s/%s/pulls/%s", owner, repo, url.PathEscape(pullNumber))
 	resp, err := api.Client.GET(path, nil)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var pull PullRequest
 	if err := json.Unmarshal(resp, &pull); err != nil {
 		return nil, fmt.Errorf("解析Pull Request详情失败: %w", err)
 	}
-	
+
 	return &pull, nil
 }
 
@@ -112,17 +123,17 @@ func (api *PullRequestAPI) CreatePullRequest(owner, repo, title, head, base, bod
 		Base:  base,
 		Body:  body,
 	}
-	
+
 	resp, err := api.Client.POST(path, nil, options)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var pull PullRequest
 	if err := json.Unmarshal(resp, &pull); err != nil {
 		return nil, fmt.Errorf("解析新Pull Request信息失败: %w", err)
 	}
-	
+
 	return &pull, nil
 }
 
@@ -133,12 +144,12 @@ func (api *PullRequestAPI) UpdatePullRequest(owner, repo string, pullNumber int,
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var pull PullRequest
 	if err := json.Unmarshal(resp, &pull); err != nil {
 		return nil, fmt.Errorf("解析更新后的Pull Request信息失败: %w", err)
 	}
-	
+
 	return &pull, nil
 }
 
@@ -156,16 +167,16 @@ func (api *PullRequestAPI) MergePullRequest(owner, repo string, pullNumber int, 
 	if err != nil {
 		return false, err
 	}
-	
+
 	var result struct {
 		Merged  bool   `json:"merged"`
 		Message string `json:"message"`
 	}
-	
+
 	if err := json.Unmarshal(resp, &result); err != nil {
 		return false, fmt.Errorf("解析合并结果失败: %w", err)
 	}
-	
+
 	return result.Merged, nil
 }
 
@@ -176,12 +187,12 @@ func (api *PullRequestAPI) ListPRReviews(owner, repo string, pullNumber int) ([]
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var reviews []interface{}
 	if err := json.Unmarshal(resp, &reviews); err != nil {
 		return nil, fmt.Errorf("解析代码审查列表失败: %w", err)
 	}
-	
+
 	return reviews, nil
 }
 
@@ -193,34 +204,59 @@ func (api *PullRequestAPI) CreatePRReview(owner, repo string, pullNumber int, bo
 		"event":    event,
 		"comments": comments,
 	}
-	
+
 	resp, err := api.Client.POST(path, nil, options)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var review interface{}
 	if err := json.Unmarshal(resp, &review); err != nil {
 		return nil, fmt.Errorf("解析新代码审查信息失败: %w", err)
 	}
-	
+
 	return review, nil
 }
 
 // ListPRComments 列出PR的评论
-func (api *PullRequestAPI) ListPRComments(owner, repo string, pullNumber int) ([]Comment, error) {
-	path := fmt.Sprintf("/repos/%s/%s/pulls/%d/comments", owner, repo, pullNumber)
-	resp, err := api.Client.GET(path, nil)
+func (api *PullRequestAPI) ListPRComments(owner, repo string, pullNumber int) ([]interface{}, error) {
+	return api.ListPRCommentsWithParams(owner, repo, fmt.Sprintf("%d", pullNumber), nil)
+}
+
+// ListPRCommentsWithParams lists pull request comments with pagination parameters.
+func (api *PullRequestAPI) ListPRCommentsWithParams(owner, repo, pullNumber string, params url.Values) ([]interface{}, error) {
+	path := fmt.Sprintf("/repos/%s/%s/pulls/%s/comments", owner, repo, url.PathEscape(pullNumber))
+	resp, err := api.Client.GET(path, params)
 	if err != nil {
 		return nil, err
 	}
-	
-	var comments []Comment
+
+	var comments []interface{}
 	if err := json.Unmarshal(resp, &comments); err != nil {
 		return nil, fmt.Errorf("解析PR评论列表失败: %w", err)
 	}
-	
+
 	return comments, nil
+}
+
+// ReplyToPRDiscussion 回复Pull Request行内评论讨论
+func (api *PullRequestAPI) ReplyToPRDiscussion(owner, repo string, pullNumber int, discussionID, body string) (interface{}, error) {
+	path := fmt.Sprintf("/repos/%s/%s/pulls/%d/discussions/%s/comments", owner, repo, pullNumber, discussionID)
+	options := map[string]string{
+		"body": body,
+	}
+
+	resp, err := api.Client.POST(path, nil, options)
+	if err != nil {
+		return nil, err
+	}
+
+	var comment interface{}
+	if err := json.Unmarshal(resp, &comment); err != nil {
+		return nil, fmt.Errorf("解析Pull Request讨论回复失败: %w", err)
+	}
+
+	return comment, nil
 }
 
 // IsPRMergeable 检查PR是否可合并
@@ -229,7 +265,7 @@ func (api *PullRequestAPI) IsPRMergeable(owner, repo string, pullNumber int) (bo
 	if err != nil {
 		return false, err
 	}
-	
+
 	return pr.Mergeable, nil
 }
 
@@ -240,12 +276,12 @@ func (api *PullRequestAPI) ListFiles(owner, repo string, pullNumber int) ([]inte
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var files []interface{}
 	if err := json.Unmarshal(resp, &files); err != nil {
 		return nil, fmt.Errorf("解析PR文件列表失败: %w", err)
 	}
-	
+
 	return files, nil
 }
 
@@ -256,11 +292,26 @@ func (api *PullRequestAPI) ListCommits(owner, repo string, pullNumber int) ([]in
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var commits []interface{}
 	if err := json.Unmarshal(resp, &commits); err != nil {
 		return nil, fmt.Errorf("解析PR提交列表失败: %w", err)
 	}
-	
+
 	return commits, nil
-} 
+}
+
+// ListAssociatedIssues lists issues linked to a pull request.
+func (api *PullRequestAPI) ListAssociatedIssues(owner, repo string, pullNumber int, params url.Values) ([]Issue, error) {
+	path := fmt.Sprintf("/repos/%s/%s/pulls/%d/issues", owner, repo, pullNumber)
+	resp, err := api.Client.GET(path, params)
+	if err != nil {
+		return nil, err
+	}
+
+	var issues []Issue
+	if err := json.Unmarshal(resp, &issues); err != nil {
+		return nil, fmt.Errorf("解析 Pull Request 关联 Issue 失败: %w", err)
+	}
+	return issues, nil
+}

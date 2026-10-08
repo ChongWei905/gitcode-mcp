@@ -1,30 +1,19 @@
 #!/bin/bash
+set -euo pipefail
 
-echo "正在构建 GitCode MCP Server..."
+project_dir="$(cd "$(dirname "$0")" && pwd)"
+build_dir="${project_dir}/bin"
 
-# 设置版本号
-VERSION="1.0.0"
+mkdir -p "${build_dir}"
+cd "${project_dir}"
 
-# 设置构建目录
-BUILD_DIR="./bin"
-mkdir -p $BUILD_DIR
+echo "Formatting GitCode MCP sources..."
+gofmt -w ./api ./config ./mcp ./main.go
 
-# 编译MCP服务器
-echo "编译MCP服务器..."
-go build -o $BUILD_DIR/gitcode-mcp main.go
-if [ $? -ne 0 ]; then
-    echo "编译失败: gitcode-mcp"
-    exit 1
-fi
+echo "Running GitCode MCP tests..."
+go test ./...
 
-# 复制配置文件示例
-cp .env.example $BUILD_DIR/.env.example
-cp mcp.json $BUILD_DIR/mcp.json
+echo "Building GitCode MCP 2.0..."
+go build -trimpath -o "${build_dir}/gitcode-mcp" .
 
-echo "编译完成！构建结果保存在 $BUILD_DIR 目录中。"
-echo "可执行文件:"
-echo "  - $BUILD_DIR/gitcode-mcp: MCP服务器"
-echo ""
-echo "使用说明:"
-echo "  STDIO模式: ./gitcode-mcp"
-echo "  SSE模式: MCP_TRANSPORT=sse ./gitcode-mcp" 
+echo "Built ${build_dir}/gitcode-mcp"

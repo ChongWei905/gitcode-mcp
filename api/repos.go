@@ -3,34 +3,37 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 )
 
 // Repository 表示仓库信息
 type Repository struct {
-	ID              int    `json:"id"`
-	Name            string `json:"name"`
-	FullName        string `json:"full_name"`
-	Owner           User   `json:"owner"`
-	Private         bool   `json:"private"`
-	HTMLUrl         string `json:"html_url"`
-	Description     string `json:"description"`
-	Fork            bool   `json:"fork"`
-	URL             string `json:"url"`
-	DefaultBranch   string `json:"default_branch"`
-	CreatedAt       string `json:"created_at"`
-	UpdatedAt       string `json:"updated_at"`
-	StargazersCount int    `json:"stargazers_count"`
-	ForksCount      int    `json:"forks_count"`
+	ID              FlexibleID `json:"id"`
+	Name            string     `json:"name"`
+	FullName        string     `json:"full_name"`
+	Owner           User       `json:"owner"`
+	Private         bool       `json:"private"`
+	HTMLUrl         string     `json:"html_url"`
+	Description     string     `json:"description"`
+	Fork            bool       `json:"fork"`
+	URL             string     `json:"url"`
+	DefaultBranch   string     `json:"default_branch"`
+	CreatedAt       string     `json:"created_at"`
+	UpdatedAt       string     `json:"updated_at"`
+	StargazersCount int        `json:"stargazers_count"`
+	ForksCount      int        `json:"forks_count"`
 }
 
 // User 表示用户信息
 type User struct {
-	ID        int    `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name"`
-	AvatarURL string `json:"avatar_url"`
-	Email     string `json:"email"`
-	URL       string `json:"url"`
+	ID        FlexibleID `json:"id"`
+	Login     string     `json:"login"`
+	Username  string     `json:"username"`
+	Name      string     `json:"name"`
+	AvatarURL string     `json:"avatar_url"`
+	Email     string     `json:"email"`
+	URL       string     `json:"url"`
+	HTMLURL   string     `json:"html_url"`
 }
 
 // CreateRepoOptions 表示创建仓库的参数
@@ -43,17 +46,22 @@ type CreateRepoOptions struct {
 
 // ListUserRepos 列出当前用户的仓库
 func (api *RepositoryAPI) ListUserRepos() ([]Repository, error) {
+	return api.ListUserReposWithParams(nil)
+}
+
+// ListUserReposWithParams lists repositories for the authenticated user with pagination.
+func (api *RepositoryAPI) ListUserReposWithParams(params url.Values) ([]Repository, error) {
 	path := "/user/repos"
-	resp, err := api.Client.GET(path, nil)
+	resp, err := api.Client.GET(path, params)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var repos []Repository
 	if err := json.Unmarshal(resp, &repos); err != nil {
 		return nil, fmt.Errorf("解析仓库列表失败: %w", err)
 	}
-	
+
 	return repos, nil
 }
 
@@ -64,12 +72,12 @@ func (api *RepositoryAPI) GetRepo(owner, repo string) (*Repository, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var repository Repository
 	if err := json.Unmarshal(resp, &repository); err != nil {
 		return nil, fmt.Errorf("解析仓库详情失败: %w", err)
 	}
-	
+
 	return &repository, nil
 }
 
@@ -81,17 +89,17 @@ func (api *RepositoryAPI) CreateRepo(name, description string, private bool) (*R
 		Private:     private,
 		AutoInit:    true,
 	}
-	
+
 	resp, err := api.Client.POST("/user/repos", nil, options)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var repo Repository
 	if err := json.Unmarshal(resp, &repo); err != nil {
 		return nil, fmt.Errorf("解析新仓库信息失败: %w", err)
 	}
-	
+
 	return &repo, nil
 }
 
@@ -102,12 +110,12 @@ func (api *RepositoryAPI) ListReposByOrg(org string) ([]Repository, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var repos []Repository
 	if err := json.Unmarshal(resp, &repos); err != nil {
 		return nil, fmt.Errorf("解析组织仓库列表失败: %w", err)
 	}
-	
+
 	return repos, nil
 }
 
@@ -118,12 +126,12 @@ func (api *RepositoryAPI) ListReposByUser(username string) ([]Repository, error)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var repos []Repository
 	if err := json.Unmarshal(resp, &repos); err != nil {
 		return nil, fmt.Errorf("解析用户仓库列表失败: %w", err)
 	}
-	
+
 	return repos, nil
 }
 
@@ -141,12 +149,12 @@ func (api *RepositoryAPI) UpdateRepo(owner, repo string, options map[string]inte
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var repository Repository
 	if err := json.Unmarshal(resp, &repository); err != nil {
 		return nil, fmt.Errorf("解析更新后的仓库信息失败: %w", err)
 	}
-	
+
 	return &repository, nil
 }
 
@@ -156,17 +164,17 @@ func (api *RepositoryAPI) TransferRepo(owner, repo, newOwner string) (*Repositor
 	body := map[string]string{
 		"new_owner": newOwner,
 	}
-	
+
 	resp, err := api.Client.POST(path, nil, body)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var repository Repository
 	if err := json.Unmarshal(resp, &repository); err != nil {
 		return nil, fmt.Errorf("解析转移后的仓库信息失败: %w", err)
 	}
-	
+
 	return &repository, nil
 }
 
@@ -177,12 +185,12 @@ func (api *RepositoryAPI) ListStargazers(owner, repo string) ([]User, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var users []User
 	if err := json.Unmarshal(resp, &users); err != nil {
 		return nil, fmt.Errorf("解析星标用户列表失败: %w", err)
 	}
-	
+
 	return users, nil
 }
 
@@ -211,6 +219,6 @@ func (api *RepositoryAPI) CheckIfStarred(owner, repo string) (bool, error) {
 		}
 		return false, err
 	}
-	
+
 	return true, nil
-} 
+}
